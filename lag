@@ -15,3 +15,57 @@ FROM
 WHERE 
     etapa_jornada = 'continua_app_temp'
     AND etapa_anterior = 'digita_cpf';
+-----------------------------------------------------------------------------
+--- query tipo funil pegando na ordem que ocorrem 
+
+WITH etapas_ordenadas AS (
+    SELECT
+        id_sessao,
+        id_cliente,
+        anomesdia,
+        etapa_jornada,
+        data_evento,
+        LAG(etapa_jornada) OVER (PARTITION BY id_sessao ORDER BY data_evento) AS etapa_anterior
+    FROM 
+        tabela_jornadas
+),
+sequencia_validada AS (
+    SELECT
+        id_sessao,
+        id_cliente,
+        anomesdia,
+        etapa_jornada,
+        data_evento,
+        CASE
+            WHEN etapa_jornada = 'digita_cpf' THEN 1
+            WHEN etapa_jornada = 'verifica_saldo' AND etapa_anterior = 'digita_cpf' THEN 2
+            WHEN etapa_jornada = 'continua_app_temp' AND etapa_anterior = 'verifica_saldo' THEN 3
+            ELSE NULL
+        END AS etapa_valida
+    FROM 
+        etapas_ordenadas
+),
+sessoes_completas AS (
+    SELECT
+        id_sessao,
+        id_cliente,
+        anomesdia,
+        COUNT(DISTINCT etapa_valida) AS etapas_cumpridas
+    FROM 
+        sequencia_validada
+    WHERE 
+        etapa_valida IS NOT NULL
+    GROUP BY 
+        id_sessao, id_cliente, anomesdia
+    HAVING 
+        etapas_cumpridas = 3 -- Todas as 3 etapas foram cumpridas
+)
+SELECT
+    anomesdia,
+    COUNT(DISTINCT id_sessao) AS sessoes_validas -- Contar sessões únicas que passaram por todas as etapas
+FROM 
+    sessoes_completas
+GROUP BY 
+    anomesdia
+ORDER BY 
+    anomesdia;

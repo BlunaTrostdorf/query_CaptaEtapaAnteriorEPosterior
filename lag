@@ -1,0 +1,17 @@
+WITH etapas_ordenadas AS (
+    SELECT
+        id_sessao,
+        id_cliente,
+        etapa_jornada,
+        data_evento,
+        LAG(etapa_jornada) OVER (PARTITION BY id_sessao ORDER BY data_evento) AS etapa_anterior
+    FROM 
+        tabela_jornadas
+)
+SELECT 
+    DISTINCT id_sessao
+FROM 
+    etapas_ordenadas
+WHERE 
+    etapa_jornada = 'continua_app_temp'
+    AND etapa_anterior = 'digita_cpf';
